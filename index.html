@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Galeria — Swipe Fullscreen</title>
+  <style>
+    :root { --bg:#000; --fg:#fff; }
+    *{ box-sizing:border-box }
+    html,body{
+      height:100%; margin:0; background:var(--bg); color:var(--fg);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      overflow:hidden; touch-action:pan-y;
+    }
+    .viewer{ position:fixed; inset:0; display:grid; place-items:center; background:#000 }
+    .stage{ position:relative; width:100%; height:100%; overflow:hidden; }
+    .stage img{
+      position:absolute; inset:0; margin:auto; max-width:100%; max-height:100%;
+      object-fit:contain; user-select:none; -webkit-user-drag:none;
+      transition:transform .25s ease, opacity .25s ease;
+    }
+    .nav{
+      position:absolute; top:50%; transform:translateY(-50%);
+      width:46px; height:46px; border-radius:999px; display:grid; place-items:center;
+      background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.18);
+      cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; z-index:10;
+    }
+    .nav:hover{ background:rgba(255,255,255,.15) }
+    .nav-left{ left:10px } .nav-right{ right:10px }
+    .indicator{
+      position:absolute; left:50%; bottom:env(safe-area-inset-bottom,12px); transform:translateX(-50%);
+      padding:6px 10px; font-size:13px; border-radius:999px; background:rgba(0,0,0,.55);
+      border:1px solid rgba(255,255,255,.14); z-index:10;
+    }
+    .grabbing{ cursor:grabbing!important }
+
+    /* ===== Popup PIX ===== */
+    .popup-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+      align-items:center; justify-content:center; z-index:9999; padding:16px;
+    }
+    .popup{
+      width:min(560px,92vw); background:#111; color:#fff; border:1px solid #2c2c2c;
+      border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.45); overflow:hidden;
+      animation:pop .15s ease-out;
+    }
+    @keyframes pop{ from{ transform:scale(.96); opacity:0 } to{ transform:scale(1); opacity:1 } }
+    .popup header{ padding:14px 16px; background:#151515; border-bottom:1px solid #262626; display:flex; align-items:center; justify-content:space-between; gap:8px }
+    .popup header h3{ margin:0; font-size:16px }
+    .popup .body{ padding:16px; display:grid; gap:10px; line-height:1.5 }
+    .popup .email{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      background:#0f172a; padding:10px 12px; border-radius:10px; border:1px solid #1f2937;
+      display:flex; align-items:center; justify-content:space-between; gap:8px; word-break:break-all;
+    }
+    .badge{
+      font-size:12px; padding:4px 8px; border-radius:999px; background:#16a34a; color:#fff; display:none;
+    }
+    .popup .actions{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #262626; background:#141414 }
+    .btn{
+      appearance:none; border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; padding:10px 12px;
+      border-radius:10px; cursor:pointer; font-weight:600;
+    }
+    .btn.primary{ background:#2563eb; border-color:#2563eb }
+  </style>
+</head>
+<body>
+  <div class="viewer" id="app">
+    <div class="stage" id="stage">
+      <img id="photo" alt="foto" draggable="false" />
+      <div class="nav nav-left"  id="prevBtn" aria-label="Anterior">‹</div>
+      <div class="nav nav-right" id="nextBtn" aria-label="Próxima">›</div>
+      <div class="indicator" id="indicator">1 / 1</div>
+    </div>
+  </div>
+
+  <!-- Popup PIX -->
+  <div class="popup-backdrop" id="pixBackdrop" aria-hidden="true">
+    <div class="popup" role="dialog" aria-modal="true" aria-labelledby="pixTitle">
+      <header>
+        <h3 id="pixTitle">PIX copiado</h3>
+        <button class="btn" id="pixClose">Fechar</button>
+      </header>
+      <div class="body">
+        <div>
+          Sua presença já é um presente 💜<br/>
+          Mas, caso queria, nosso PIX é o e-mail abaixo:
+        </div>
+        <div class="email">
+          <span id="pixText">luademelcasalMR@gmail.com</span>
+          <span class="badge" id="pixBadge">Copiado!</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="pixCopy">Copiar novamente</button>
+        <button class="btn primary" id="pixOk">Ok</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== Lista de imagens ===== */
+    const IMAGES = ["01.PNG","02.PNG","03.PNG","04.PNG","05.PNG","06.PNG","07.PNG"];
+    const LINK_04 = "https://drive.google.com/drive/folders/1JtjnutHUr9MFYZGamiIteKZO6adllAIX";
+    const PIX_EMAIL = "luademelcasalMR@gmail.com";
+
+    const img = document.getElementById('photo');
+    const indicator = document.getElementById('indicator');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const stage = document.getElementById('stage');
+
+    let index = 0;
+
+    function preload(i){
+      [i-1,i+1].forEach(k=>{
+        const j=(k+IMAGES.length)%IMAGES.length;
+        const a=new Image(); a.src=IMAGES[j];
+      });
+    }
+    function show(i, dir=0){
+      index=(i+IMAGES.length)%IMAGES.length;
+      indicator.textContent=(index+1)+" / "+IMAGES.length;
+      img.style.opacity=0; img.style.transform=`translateX(${dir*-20}px)`;
+      requestAnimationFrame(()=>{
+        img.src=IMAGES[index];
+        img.onload=()=>{ img.style.opacity=1; img.style.transform='translateX(0)' }
+      });
+      preload(index);
+    }
+    function next(){ show(index+1,+1) }
+    function prev(){ show(index-1,-1) }
+    prevBtn.addEventListener('click',prev);
+    nextBtn.addEventListener('click',next);
+    window.addEventListener('keydown',e=>{
+      if(e.key==='ArrowRight') next();
+      if(e.key==='ArrowLeft')  prev();
+    });
+
+    // ===== Copiar para área de transferência (com fallback) =====
+    function copyFallback(text){
+      return new Promise((resolve,reject)=>{
+        const ta=document.createElement('textarea');
+        ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try{
+          const ok=document.execCommand && document.execCommand('copy');
+          document.body.removeChild(ta);
+          ok?resolve():reject(new Error('execCommand falhou'));
+        }catch(err){ document.body.removeChild(ta); reject(err) }
+      });
+    }
+    function copyText(text){
+      if(navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      return copyFallback(text);
+    }
+
+    // ===== Popup PIX =====
+    const pixBackdrop = document.getElementById('pixBackdrop');
+    const pixText = document.getElementById('pixText');
+    const pixBadge = document.getElementById('pixBadge');
+    const pixClose = document.getElementById('pixClose');
+    const pixOk = document.getElementById('pixOk');
+    const pixCopy = document.getElementById('pixCopy');
+
+    function openPixPopup(){
+      pixText.textContent = PIX_EMAIL;
+      pixBadge.style.display = 'none';
+      pixBackdrop.style.display = 'flex';
+      pixBackdrop.setAttribute('aria-hidden','false');
+      // tenta copiar automaticamente e mostra “Copiado!”
+      copyText(PIX_EMAIL).then(()=>{
+        pixBadge.style.display = 'inline-block';
+      }).catch(()=>{/* tudo bem, usuário pode clicar "Copiar novamente" */});
+    }
+    function closePixPopup(){
+      pixBackdrop.style.display = 'none';
+      pixBackdrop.setAttribute('aria-hidden','true');
+    }
+    pixCopy.addEventListener('click', async ()=>{
+      try{
+        await copyText(PIX_EMAIL);
+        pixBadge.style.display='inline-block';
+      }catch(e){ alert('Não foi possível copiar automaticamente. Copie manualmente: '+PIX_EMAIL) }
+    });
+    pixOk.addEventListener('click', closePixPopup);
+    pixClose.addEventListener('click', closePixPopup);
+    pixBackdrop.addEventListener('click', e=>{ if(e.target===pixBackdrop) closePixPopup(); });
+
+    // Clique na imagem: ações específicas
+    img.addEventListener('click', () => {
+      const name = IMAGES[index];
+      if (name === "04.PNG") {
+        window.open(LINK_04, "_blank");
+        return;
+      }
+      if (name === "06.PNG") {
+        openPixPopup();
+        return;
+      }
+    });
+
+    // ===== Swipe =====
+    let startX=0,startY=0,tracking=false,moved=false;
+    stage.addEventListener('pointerdown',e=>{
+      tracking=true; moved=false; startX=e.clientX; startY=e.clientY;
+      stage.setPointerCapture(e.pointerId); document.body.classList.add('grabbing');
+    });
+    stage.addEventListener('pointermove',e=>{
+      if(!tracking) return;
+      const dx=e.clientX-startX, dy=e.clientY-startY;
+      if(Math.abs(dx)>Math.abs(dy)){ moved=true; img.style.transform=`translateX(${dx*.6}px)`; img.style.opacity=String(1-Math.min(Math.abs(dx)/300,.4)) }
+    });
+    stage.addEventListener('pointerup',e=>{
+      if(!tracking) return; tracking=false; document.body.classList.remove('grabbing');
+      const dx=e.clientX-startX, TH=60;
+      if(moved && Math.abs(dx)>TH){ dx<0?next():prev() } else { img.style.transform='translateX(0)'; img.style.opacity=1 }
+    });
+    stage.addEventListener('pointercancel',()=>{ tracking=false; document.body.classList.remove('grabbing'); img.style.transform='translateX(0)'; img.style.opacity=1 });
+
+    // Start
+    show(0);
+  </script>
+</body>
+</html>
