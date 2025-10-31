@@ -22,10 +22,10 @@
     .nav{
       position:absolute; top:50%; transform:translateY(-50%);
       width:46px; height:46px; border-radius:999px; display:grid; place-items:center;
-      background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.18);
+      background:rgb(105, 105, 105); color:#504e4e; border:1px solid rgba(255,255,255,.18);
       cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; z-index:10;
     }
-    .nav:hover{ background:rgba(255,255,255,.15) }
+    .nav:hover{ background:rgba(255, 255, 255, 0.733) }
     .nav-left{ left:10px } .nav-right{ right:10px }
     .indicator{
       position:absolute; left:50%; bottom:env(safe-area-inset-bottom,12px); transform:translateX(-50%);
@@ -88,6 +88,17 @@
       border:1px solid #2a2a2a; font:inherit;
     }
     .textarea{ min-height:90px; resize:vertical }
+
+    /* ===== Iframe (link 04) + X + loading ===== */
+    .modal-iframe{ width:min(900px,94vw); height:min(600px,90vh); display:flex; flex-direction:column; }
+    .modal-iframe iframe{ flex:1; width:100%; border:0; border-top:1px solid #222; background:#0b0b0b; }
+    .btn-icon{ display:grid; place-items:center; width:36px; height:36px; border-radius:10px; font-size:18px; line-height:1; padding:0;
+      appearance:none; border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; cursor:pointer; font-weight:600; }
+    .loading{ display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; color:#cbd5e1 }
+    .hidden{ display:none !important; }
+
+
+    
   </style>
 </head>
 <body>
@@ -109,8 +120,8 @@
       </header>
       <div class="body">
         <div>
-       Sua presença já é um presente <br>
-Mas se quiser participar da lua de mel … pix é o e-mail!
+          Sua presença já é um presente <br>
+          Mas se quiser participar da lua de mel … pix é o e-mail!
         </div>
         <div class="email">
           <span id="pixText">luademelcasalMR@gmail.com</span>
@@ -146,6 +157,34 @@ Mas se quiser participar da lua de mel … pix é o e-mail!
       <div class="footer">
         <button class="btn" id="gbRefresh">Atualizar</button>
         <button class="btn primary" id="gbSend">Enviar mensagem</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Popup do LINK_04 (iframe) -->
+  <div class="backdrop" id="iframeBackdrop" aria-hidden="true">
+    <div class="modal modal-iframe" role="dialog" aria-modal="true" aria-labelledby="iframeTitle">
+      <header>
+        <h3 id="iframeTitle">Visualização</h3>
+        <div style="display:flex; gap:8px; align-items:center">
+          <a class="btn" id="iframeOpen" href="#" target="_blank" rel="noopener">Abrir em nova aba</a>
+          <button class="btn-icon" id="iframeX" aria-label="Fechar">×</button>
+        </div>
+      </header>
+      <div id="iframeLoading" class="loading">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" stroke="#94a3b8" stroke-width="3" opacity=".25"/>
+          <path d="M22 12a10 10 0 0 1-10 10" stroke="#94a3b8" stroke-width="3">
+            <animateTransform attributeName="transform" type="rotate" dur="0.9s" repeatCount="indefinite" from="0 12 12" to="360 12 12"/>
+          </path>
+        </svg>
+        Carregando…
+      </div>
+      <iframe id="iframeView" src="" title="Conteúdo"></iframe>
+      <div id="iframeBlocked" class="body hidden">
+        <div class="muted">
+          O site não permite ser exibido dentro de um iframe. Use o botão <b>Abrir em nova aba</b> acima.
+        </div>
       </div>
     </div>
   </div>
@@ -271,7 +310,7 @@ Mas se quiser participar da lua de mel … pix é o e-mail!
       gbList.innerHTML = `<div class="muted">Carregando mensagens…</div>`;
       try{
         const resp = await fetch(SHEETDB_URL, { cache: "no-store" });
-        const arr = await resp.json(); // array de linhas [{createdAt, nome, mensagem, ...}]
+        const arr = await resp.json();
         const data = Array.isArray(arr) ? arr : [];
         data.sort((a,b)=> String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 
@@ -319,11 +358,9 @@ Mas se quiser participar da lua de mel … pix é o e-mail!
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const j = await resp.json();
-        // SheetDB retorna algo como {created: 1} ou o objeto inserido; tratamos genericamente:
+        await resp.json();
         gbNome.value = ""; gbMsg.value = "";
         await loadMessages();
-        // feedback visual rápido
         gbSend.textContent = "Mensagem enviada!";
         setTimeout(()=>{ gbSend.textContent = "Enviar mensagem"; gbSend.disabled = false; }, 900);
       }catch(err){
@@ -335,10 +372,59 @@ Mas se quiser participar da lua de mel … pix é o e-mail!
     }
     gbSend.addEventListener('click', sendMessage);
 
+    // ===== Iframe Popup (LINK_04) =====
+    const iframeBackdrop = document.getElementById('iframeBackdrop');
+    const iframeView = document.getElementById('iframeView');
+    const iframeX = document.getElementById('iframeX');
+    const iframeOpen = document.getElementById('iframeOpen');
+    const iframeLoading = document.getElementById('iframeLoading');
+    const iframeBlocked = document.getElementById('iframeBlocked');
+
+    function openIframePopup(url){
+      iframeOpen.href = url;                   // fallback "Abrir em nova aba"
+      iframeLoading.classList.remove('hidden');
+      iframeBlocked.classList.add('hidden');
+
+      let loaded = false;
+      const onLoad = () => {
+        loaded = true;
+        iframeLoading.classList.add('hidden');
+        // Se carrega, mantemos o iframe visível normalmente
+      };
+      // limpar handlers anteriores
+      iframeView.onload = null;
+      iframeView.onerror = null;
+
+      iframeView.onload = onLoad;
+      iframeView.onerror = () => {
+        // Alguns navegadores não disparam onerror para bloqueio por X-Frame-Options.
+        // O timeout abaixo cobre esse caso.
+      };
+
+      // Timeout: se não carregar em X ms, assume bloqueio e mostra fallback
+      iframeView.src = url;
+      setTimeout(() => {
+        if (!loaded) {
+          iframeLoading.classList.add('hidden');
+          iframeBlocked.classList.remove('hidden');
+        }
+      }, 3500);
+
+      iframeBackdrop.style.display = 'flex';
+      iframeBackdrop.setAttribute('aria-hidden','false');
+    }
+    function closeIframePopup(){
+      iframeView.src = '';
+      iframeBackdrop.style.display = 'none';
+      iframeBackdrop.setAttribute('aria-hidden','true');
+    }
+    iframeX.addEventListener('click', closeIframePopup);
+    iframeBackdrop.addEventListener('click', (e)=>{ if(e.target===iframeBackdrop) closeIframePopup(); });
+
     // Clique na imagem: ações específicas
     img.addEventListener('click', () => {
       const name = IMAGES[index];
-      if (name === "04.PNG") { window.open(LINK_04, "_blank"); return; }
+      if (name === "04.PNG") { openIframePopup(LINK_04); return; }
       if (name === "06.PNG") { openPixPopup(); return; }
       if (name === "07.PNG")  { window.open(LINK_04, "_blank"); return; }
     });
@@ -365,6 +451,4 @@ Mas se quiser participar da lua de mel … pix é o e-mail!
     show(0);
   </script>
 </body>
-
-
 </html>
