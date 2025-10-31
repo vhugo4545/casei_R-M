@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Galeria — Swipe Fullscreen</title>
   <style>
-    :root { --bg:#000; --fg:#fff; }
+    :root { --bg:#000; --fg:#fff; --muted:#94a3b8; --primary:#2563eb; }
     *{ box-sizing:border-box }
     html,body{
       height:100%; margin:0; background:var(--bg); color:var(--fg);
@@ -34,21 +34,33 @@
     }
     .grabbing{ cursor:grabbing!important }
 
-    /* ===== Popup PIX ===== */
-    .popup-backdrop{
+    /* ===== Popup base ===== */
+    .backdrop{
       position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
       align-items:center; justify-content:center; z-index:9999; padding:16px;
     }
-    .popup{
-      width:min(560px,92vw); background:#111; color:#fff; border:1px solid #2c2c2c;
+    .modal{
+      width:min(640px,92vw); background:#111; color:#fff; border:1px solid #2c2c2c;
       border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.45); overflow:hidden;
       animation:pop .15s ease-out;
     }
     @keyframes pop{ from{ transform:scale(.96); opacity:0 } to{ transform:scale(1); opacity:1 } }
-    .popup header{ padding:14px 16px; background:#151515; border-bottom:1px solid #262626; display:flex; align-items:center; justify-content:space-between; gap:8px }
-    .popup header h3{ margin:0; font-size:16px }
-    .popup .body{ padding:16px; display:grid; gap:10px; line-height:1.5 }
-    .popup .email{
+    .modal header{
+      padding:14px 16px; background:#151515; border-bottom:1px solid #262626;
+      display:flex; align-items:center; justify-content:space-between; gap:8px
+    }
+    .modal header h3{ margin:0; font-size:16px }
+    .modal .body{ padding:16px; display:grid; gap:12px; line-height:1.55 }
+    .muted{ color:var(--muted) }
+    .btn{
+      appearance:none; border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; padding:10px 12px;
+      border-radius:10px; cursor:pointer; font-weight:600;
+    }
+    .btn.primary{ background:var(--primary); border-color:var(--primary) }
+    .btn:disabled{ opacity:.6; cursor:not-allowed }
+
+    /* PIX modal specifics */
+    .email{
       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
       background:#0f172a; padding:10px 12px; border-radius:10px; border:1px solid #1f2937;
       display:flex; align-items:center; justify-content:space-between; gap:8px; word-break:break-all;
@@ -56,12 +68,26 @@
     .badge{
       font-size:12px; padding:4px 8px; border-radius:999px; background:#16a34a; color:#fff; display:none;
     }
-    .popup .actions{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #262626; background:#141414 }
-    .btn{
-      appearance:none; border:1px solid #2a2a2a; background:#1a1a1a; color:#fff; padding:10px 12px;
-      border-radius:10px; cursor:pointer; font-weight:600;
+    .footer{ display:flex; gap:8px; justify-content:flex-end; padding:12px 16px; border-top:1px solid #262626; background:#141414 }
+
+    /* Guestbook modal */
+    .list{
+      display:grid; gap:10px; max-height:45vh; overflow:auto; padding-right:4px;
+      border:1px solid #222; border-radius:12px; padding:12px;
+      background:#0f0f0f;
     }
-    .btn.primary{ background:#2563eb; border-color:#2563eb }
+    .msg{
+      background:#0e1013; border:1px solid #23262d; border-radius:12px; padding:10px 12px;
+    }
+    .msg .who{ font-weight:700 }
+    .msg .when{ font-size:12px; color:var(--muted) }
+    .row{ display:grid; gap:10px }
+    .row.grid-2{ grid-template-columns: 1fr 1fr }
+    .input, .textarea{
+      width:100%; padding:10px 12px; border-radius:10px; background:#0d0d0d; color:#fff;
+      border:1px solid #2a2a2a; font:inherit;
+    }
+    .textarea{ min-height:90px; resize:vertical }
   </style>
 </head>
 <body>
@@ -75,8 +101,8 @@
   </div>
 
   <!-- Popup PIX -->
-  <div class="popup-backdrop" id="pixBackdrop" aria-hidden="true">
-    <div class="popup" role="dialog" aria-modal="true" aria-labelledby="pixTitle">
+  <div class="backdrop" id="pixBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pixTitle">
       <header>
         <h3 id="pixTitle">PIX copiado</h3>
         <button class="btn" id="pixClose">Fechar</button>
@@ -84,25 +110,54 @@
       <div class="body">
         <div>
           Sua presença já é um presente 💜<br/>
-          Mas, caso queria, nosso PIX é o e-mail abaixo:
+          Mas, caso queira, nosso PIX é o e-mail abaixo:
         </div>
         <div class="email">
           <span id="pixText">luademelcasalMR@gmail.com</span>
           <span class="badge" id="pixBadge">Copiado!</span>
         </div>
       </div>
-      <div class="actions">
+      <div class="footer">
         <button class="btn" id="pixCopy">Copiar novamente</button>
         <button class="btn primary" id="pixOk">Ok</button>
       </div>
     </div>
   </div>
 
+  <!-- Popup Guestbook (mensagens) -->
+  <div class="backdrop" id="gbBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gbTitle">
+      <header>
+        <h3 id="gbTitle">Deixe uma mensagem para os noivos 💌</h3>
+        <button class="btn" id="gbClose">Fechar</button>
+      </header>
+      <div class="body">
+        <div class="muted">Veja o carinho que a galera já deixou e escreva o seu também!</div>
+
+        <div class="list" id="gbList">
+          <!-- mensagens renderizadas aqui -->
+        </div>
+
+        <div class="row">
+          <input class="input" id="gbNome" placeholder="Seu nome" />
+          <textarea class="textarea" id="gbMsg" placeholder="Sua mensagem aos noivos"></textarea>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn" id="gbRefresh">Atualizar</button>
+        <button class="btn primary" id="gbSend">Enviar mensagem</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    /* ===== Lista de imagens ===== */
-    const IMAGES = ["01.PNG","02.PNG","03.PNG","04.PNG","05.PNG","06.PNG","07.PNG"];
-    const LINK_04 = "https://drive.google.com/drive/folders/1JtjnutHUr9MFYZGamiIteKZO6adllAIX";
+    /* ===== Configs ===== */
+    const IMAGES   = ["01.PNG","02.PNG","03.PNG","04.PNG","05.PNG","06.PNG","07.PNG"];
+    const LINK_04  = "https://app.kululu.com/xsfjee";
     const PIX_EMAIL = "luademelcasalMR@gmail.com";
+
+    // SheetDB endpoint
+    const SHEETDB_URL = "https://sheetdb.io/api/v1/2smd4m5xnc8c5";
 
     const img = document.getElementById('photo');
     const indicator = document.getElementById('indicator');
@@ -137,7 +192,7 @@
       if(e.key==='ArrowLeft')  prev();
     });
 
-    // ===== Copiar para área de transferência (com fallback) =====
+    // ===== Clipboard helpers =====
     function copyFallback(text){
       return new Promise((resolve,reject)=>{
         const ta=document.createElement('textarea');
@@ -155,7 +210,7 @@
       return copyFallback(text);
     }
 
-    // ===== Popup PIX =====
+    // ===== PIX modal =====
     const pixBackdrop = document.getElementById('pixBackdrop');
     const pixText = document.getElementById('pixText');
     const pixBadge = document.getElementById('pixBadge');
@@ -168,36 +223,124 @@
       pixBadge.style.display = 'none';
       pixBackdrop.style.display = 'flex';
       pixBackdrop.setAttribute('aria-hidden','false');
-      // tenta copiar automaticamente e mostra “Copiado!”
-      copyText(PIX_EMAIL).then(()=>{
-        pixBadge.style.display = 'inline-block';
-      }).catch(()=>{/* tudo bem, usuário pode clicar "Copiar novamente" */});
+      copyText(PIX_EMAIL).then(()=>{ pixBadge.style.display='inline-block'; }).catch(()=>{});
     }
     function closePixPopup(){
       pixBackdrop.style.display = 'none';
       pixBackdrop.setAttribute('aria-hidden','true');
     }
     pixCopy.addEventListener('click', async ()=>{
-      try{
-        await copyText(PIX_EMAIL);
-        pixBadge.style.display='inline-block';
-      }catch(e){ alert('Não foi possível copiar automaticamente. Copie manualmente: '+PIX_EMAIL) }
+      try{ await copyText(PIX_EMAIL); pixBadge.style.display='inline-block'; }
+      catch(e){ alert('Não foi possível copiar automaticamente. Copie manualmente: '+PIX_EMAIL) }
     });
     pixOk.addEventListener('click', closePixPopup);
     pixClose.addEventListener('click', closePixPopup);
     pixBackdrop.addEventListener('click', e=>{ if(e.target===pixBackdrop) closePixPopup(); });
 
+    // ===== Guestbook modal (SheetDB) =====
+    const gbBackdrop = document.getElementById('gbBackdrop');
+    const gbClose = document.getElementById('gbClose');
+    const gbList = document.getElementById('gbList');
+    const gbNome = document.getElementById('gbNome');
+    const gbMsg  = document.getElementById('gbMsg');
+    const gbSend = document.getElementById('gbSend');
+    const gbRefresh = document.getElementById('gbRefresh');
+
+    function openGuestbook(){
+      gbBackdrop.style.display = 'flex';
+      gbBackdrop.setAttribute('aria-hidden','false');
+      loadMessages();
+    }
+    function closeGuestbook(){
+      gbBackdrop.style.display = 'none';
+      gbBackdrop.setAttribute('aria-hidden','true');
+    }
+    gbClose.addEventListener('click', closeGuestbook);
+    gbBackdrop.addEventListener('click', (e)=>{ if(e.target===gbBackdrop) closeGuestbook(); });
+    gbRefresh.addEventListener('click', loadMessages);
+
+    function fmtDate(d){
+      try{
+        const date = new Date(d);
+        if (!isNaN(date)) return date.toLocaleString('pt-BR');
+      }catch(_){}
+      return d || '';
+    }
+
+    async function loadMessages(){
+      gbList.innerHTML = `<div class="muted">Carregando mensagens…</div>`;
+      try{
+        const resp = await fetch(SHEETDB_URL, { cache: "no-store" });
+        const arr = await resp.json(); // array de linhas [{createdAt, nome, mensagem, ...}]
+        const data = Array.isArray(arr) ? arr : [];
+        data.sort((a,b)=> String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+
+        if (!data.length){
+          gbList.innerHTML = `<div class="muted">Ainda não há mensagens. Seja o primeiro(a) a deixar um carinho! 🥰</div>`;
+          return;
+        }
+
+        gbList.innerHTML = "";
+        data.forEach(row=>{
+          const div = document.createElement('div');
+          div.className = 'msg';
+          div.innerHTML = `
+            <div class="who">${(row.nome||'Anônimo')}</div>
+            <div class="text">${(row.mensagem||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div class="when">${fmtDate(row.createdAt)}</div>
+          `;
+          gbList.appendChild(div);
+        });
+      }catch(err){
+        gbList.innerHTML = `<div class="muted">Falha ao carregar mensagens.</div>`;
+        console.error(err);
+      }
+    }
+
+    async function sendMessage(){
+      const nome = (gbNome.value||'').trim();
+      const mensagem = (gbMsg.value||'').trim();
+      if (!nome || !mensagem){
+        alert('Preencha nome e mensagem.');
+        return;
+      }
+      const payload = {
+        data: [{
+          createdAt: new Date().toISOString(),
+          nome,
+          mensagem
+        }]
+      };
+      gbSend.disabled = true;
+      gbSend.textContent = "Enviando…";
+      try{
+        const resp = await fetch(SHEETDB_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const j = await resp.json();
+        // SheetDB retorna algo como {created: 1} ou o objeto inserido; tratamos genericamente:
+        gbNome.value = ""; gbMsg.value = "";
+        await loadMessages();
+        // feedback visual rápido
+        gbSend.textContent = "Mensagem enviada!";
+        setTimeout(()=>{ gbSend.textContent = "Enviar mensagem"; gbSend.disabled = false; }, 900);
+      }catch(err){
+        console.error(err);
+        alert("Falha ao enviar. Tente novamente.");
+        gbSend.disabled = false;
+        gbSend.textContent = "Enviar mensagem";
+      }
+    }
+    gbSend.addEventListener('click', sendMessage);
+
     // Clique na imagem: ações específicas
     img.addEventListener('click', () => {
       const name = IMAGES[index];
-      if (name === "04.PNG") {
-        window.open(LINK_04, "_blank");
-        return;
-      }
-      if (name === "06.PNG") {
-        openPixPopup();
-        return;
-      }
+      if (name === "04.PNG") { window.open(LINK_04, "_blank"); return; }
+      if (name === "06.PNG") { openPixPopup(); return; }
+      if (name === "07.PNG")  { window.open(LINK_04, "_blank"); return; }
     });
 
     // ===== Swipe =====
@@ -222,4 +365,6 @@
     show(0);
   </script>
 </body>
+
+
 </html>
